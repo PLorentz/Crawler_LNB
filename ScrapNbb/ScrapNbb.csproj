@@ -66,7 +66,9 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Equipe.cs" />
     <Compile Include="Estatistica.cs" />
+    <Compile Include="Jogador.cs" />
     <Compile Include="Jogo.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

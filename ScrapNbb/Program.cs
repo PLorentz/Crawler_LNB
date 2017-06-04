@@ -15,12 +15,85 @@ namespace ScrapNbb
 {
     class Program
     {
-        static string _caminhoArquivo = @"jogos.json";
+        static string _caminhoArquivoJogos = @"jogos.json";
+        static string _caminhoArquivoEquipes = @"equipes.json";
 
         static void Main(string[] args)
         {
-            var url = "http://lnb.com.br/nbb/tabela-de-jogos/?season%5B%5D=34&wherePlaying=-1&played=-1";
+            //string texto = ExtraiJogos("http://lnb.com.br/nbb/tabela-de-jogos/?season%5B%5D=34&wherePlaying=-1&played=-1");
+
+            string texto = ExtraiInfoEquipes("http://lnb.com.br/nbb/equipes/");
+
+            //File.WriteAllText(_caminhoArquivoJogos, texto);
+            File.WriteAllText(_caminhoArquivoEquipes, texto);
+        }
+
+        private static string ExtraiInfoEquipes(string url)
+        {
             var document = new HtmlWeb().Load(url);
+
+            var secao = document.DocumentNode.Descendants("section").First(s => s.Attributes.Contains("class") && s.Attributes["class"].Value.Contains("archive_team_screen_one"));
+            var urlsEquipes = secao.Descendants("a").Select(a => a.Attributes["href"].Value);
+
+            var equipes = ExtraiDadosEquipes(urlsEquipes);
+
+            return JsonConvert.SerializeObject(equipes);
+        }
+
+        private static List<Equipe> ExtraiDadosEquipes(IEnumerable<string> urlsEquipes)
+        {
+            var rand = new Random();
+            var equipes = new List<Equipe>();
+
+            foreach (var urlEquipe in urlsEquipes)
+            {
+                Thread.Sleep((int)Math.Ceiling(2500 * rand.NextDouble()));
+                Console.WriteLine(urlEquipe);
+
+                var documentEquipe = new HtmlWeb().Load(urlEquipe);
+
+                var secaoCabecalho = documentEquipe.GetElementbyId("main-container").Descendants("section").First(s => s.Attributes.Contains("class") && s.Attributes["class"].Value.Contains("team_subheader"));
+                var nomeTime = secaoCabecalho.Descendants("strong").First(s => s.Attributes.Contains("class") && s.Attributes["class"].Value.Contains("title")).InnerText;
+                Console.WriteLine(nomeTime);
+
+                var equipe = new Equipe
+                {
+                    Url = urlEquipe,
+                    Nome = nomeTime,
+                    Jogadores = new List<Jogador>()
+                };
+                equipes.Add(equipe);
+
+                var div6 = documentEquipe.GetElementbyId("6");
+
+                var aJogadores = div6.Descendants("a");
+
+                foreach (var aJogador in aJogadores)
+                {
+                    var strongs = aJogador.Descendants("strong");
+
+                    var linhaInfo = aJogador.Descendants("table").Single().Descendants("tbody").Single().Descendants("tr").Single();
+                    var celulasInfo = linhaInfo.Descendants("td").ToList();
+
+                    equipe.Jogadores.Add(new Jogador
+                    {
+                        Nome = strongs.First(s => s.Attributes["class"].Value.Contains("name")).InnerText,
+                        Numero = strongs.First(s => s.Attributes["class"].Value.Contains("number")).InnerText,
+                        Posicao = celulasInfo[0].InnerText,
+                        Altura = celulasInfo[1].InnerText,
+                        Idade = celulasInfo[2].InnerText,
+                        Url = aJogador.Attributes["href"].Value
+                    });
+                }
+            }
+
+            return equipes;
+        }
+
+        private static string ExtraiJogos(string url)
+        {
+            var document = new HtmlWeb().Load(url);
+
             var linhas = document.DocumentNode.Descendants("table").First().Descendants("tbody").First().Descendants("tr");
             var jogos = linhas.Select(tr =>
             {
@@ -46,29 +119,13 @@ namespace ScrapNbb
 
             CarregaJogosPartidas(jogos, rand);
 
-            var textoJogos = JsonConvert.SerializeObject(jogos);
-
-            File.WriteAllText(_caminhoArquivo, textoJogos);
+            return JsonConvert.SerializeObject(jogos);
         }
 
         private static void CarregaJogosPartidas(List<Jogo> jogos, Random rand)
         {
             using (var phantom = new PhantomJSDriver())
             {
-                var waiter = new WebDriverWait(phantom, TimeSpan.FromSeconds(3));
-                var espera = new Action(() =>
-                {
-                    try
-                    {
-                        waiter.Until(w => false);
-                    }
-                    catch (WebDriverTimeoutException)
-                    {
-                        // Deixo estourar o tempo.
-                    }
-                }
-                );
-
                 foreach (var jogo in jogos.Where(j => j.Url?.Contains("lnb.com.br/partidas/") ?? false))
                 {
                     try
@@ -77,7 +134,7 @@ namespace ScrapNbb
                         Console.WriteLine(jogo.Id);
 
                         phantom.Navigate().GoToUrl(jogo.Url);
-                        espera();
+                        EsperaSegundos(phantom, 3);
 
                         var documentJogo = new HtmlDocument();
                         documentJogo.LoadHtml(phantom.PageSource);
@@ -100,6 +157,28 @@ namespace ScrapNbb
                     }
                 }
             }
+        }
+
+        private static Action MontaEsperaSegundos(PhantomJSDriver phantom, int segundos)
+        {
+            var waiter = new WebDriverWait(phantom, TimeSpan.FromSeconds(segundos));
+            var espera = new Action(() =>
+            {
+                try
+                {
+                    waiter.Until(w => false);
+                }
+                catch (WebDriverTimeoutException)
+                {
+                    // Deixo estourar o tempo.
+                }
+            });
+            return espera;
+        }
+
+        private static void EsperaSegundos(PhantomJSDriver phantom, int segundos)
+        {
+            MontaEsperaSegundos(phantom, segundos)();
         }
 
         private static void CarregaJogosNoticias(List<Jogo> jogos, Random rand)
