@@ -3,7 +3,7 @@
 namespace ScrapNbb
 {
     [Serializable]
-    internal class Estatistica
+    public class Estatistica
     {
         public string Assistencias { get; set; }
         public string DoisPontos { get; set; }

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace ScrapNbb
 {
     [Serializable]
-    internal class Jogo
+    public class Jogo
     {
         public string Campeonato { get; set; }
         public string Data { get; set; }
