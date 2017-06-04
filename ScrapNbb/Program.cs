@@ -34,10 +34,10 @@ namespace ScrapNbb
                     PontuacaoVisitante = celulas[4].Descendants("span").FirstOrDefault(c => c.Attributes.Contains("class") && c.Attributes["class"].Value.Contains("away"))?.InnerText,
                     Url = celulas[4].Descendants("a").FirstOrDefault()?.Attributes["href"]?.Value,
                     EquipeVisitante = celulas[6].InnerText,
-                    Rodada = celulas[7].InnerText,
-                    Fase = celulas[8].InnerText,
-                    Campeonato = celulas[9].InnerText,
-                    Ginasio = celulas[10].InnerText
+                    Rodada = celulas[8].InnerText,
+                    Fase = celulas[9].InnerText,
+                    Campeonato = celulas[10].InnerText,
+                    Ginasio = celulas[11].InnerText
                 };
             }).ToList();
 
@@ -49,10 +49,6 @@ namespace ScrapNbb
             var textoJogos = JsonConvert.SerializeObject(jogos);
 
             File.WriteAllText(_caminhoArquivo, textoJogos);
-
-            var textoRecuperado = File.ReadAllText(_caminhoArquivo);
-            var recuperado = JsonConvert.DeserializeObject<List<Jogo>>(textoRecuperado);
-
         }
 
         private static void CarregaJogosPartidas(List<Jogo> jogos, Random rand)
@@ -75,25 +71,33 @@ namespace ScrapNbb
 
                 foreach (var jogo in jogos.Where(j => j.Url?.Contains("lnb.com.br/partidas/") ?? false))
                 {
-                    Thread.Sleep((int)Math.Ceiling(10 * rand.NextDouble()));
-                    Console.WriteLine(jogo.Id);
+                    try
+                    {
+                        Thread.Sleep((int)Math.Ceiling(10 * rand.NextDouble()));
+                        Console.WriteLine(jogo.Id);
 
-                    phantom.Navigate().GoToUrl(jogo.Url);
-                    espera();
+                        phantom.Navigate().GoToUrl(jogo.Url);
+                        espera();
 
-                    var documentJogo = new HtmlDocument();
-                    documentJogo.LoadHtml(phantom.PageSource);
+                        var documentJogo = new HtmlDocument();
+                        documentJogo.LoadHtml(phantom.PageSource);
 
-                    var divStats = documentJogo.DocumentNode.Descendants("div").First(d => d.Id == "stats");
-                    var divsComClasse = divStats.Descendants("div").Where(d => d.Attributes.Contains("class"));
+                        var divStats = documentJogo.DocumentNode.Descendants("div").First(d => d.Id == "stats");
+                        var divsComClasse = divStats.Descendants("div").Where(d => d.Attributes.Contains("class"));
 
-                    var divCasa = divsComClasse.First(d => d.Attributes["class"].Value.Contains("stats_real_time_table_home"));
-                    var tabelaCasa = divCasa.Descendants("table").Skip(1).First().Descendants("tbody").First();
-                    jogo.EstatisticasCasa = ExtraiEstatisticaTimePartida(tabelaCasa);
+                        var divCasa = divsComClasse.First(d => d.Attributes["class"].Value.Contains("stats_real_time_table_home"));
+                        var tabelaCasa = divCasa.Descendants("table").Skip(1).First().Descendants("tbody").First();
+                        jogo.EstatisticasCasa = ExtraiEstatisticaTimePartida(tabelaCasa);
 
-                    var divVisitante = divsComClasse.First(d => d.Attributes["class"].Value.Contains("stats_real_time_table_away"));
-                    var tabelaVisitante = divCasa.Descendants("table").Skip(1).First().Descendants("tbody").First();
-                    jogo.EstatisticasVisitante = ExtraiEstatisticaTimePartida(tabelaVisitante);
+                        var divVisitante = divsComClasse.First(d => d.Attributes["class"].Value.Contains("stats_real_time_table_away"));
+                        var tabelaVisitante = divCasa.Descendants("table").Skip(1).First().Descendants("tbody").First();
+                        jogo.EstatisticasVisitante = ExtraiEstatisticaTimePartida(tabelaVisitante);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(jogo.Url);
+                        Console.WriteLine(ex);
+                    }
                 }
             }
         }
@@ -102,18 +106,26 @@ namespace ScrapNbb
         {
             foreach (var jogo in jogos.Where(j => j.Url?.Contains("lnb.com.br/noticias/") ?? false))
             {
-                Thread.Sleep((int)Math.Ceiling(3000 * rand.NextDouble()));
-                Console.WriteLine(jogo.Id);
+                try
+                {
+                    Thread.Sleep((int)Math.Ceiling(3000 * rand.NextDouble()));
+                    Console.WriteLine(jogo.Id);
 
-                var documentJogo = new HtmlWeb().Load(jogo.Url);
+                    var documentJogo = new HtmlWeb().Load(jogo.Url);
 
-                var divCasa = documentJogo.DocumentNode.Descendants("div").First(d => d.Id == "team_home_stats");
-                var tabelaCasa = divCasa.Descendants("table").First().Descendants("tbody").First();
-                jogo.EstatisticasCasa = ExtraiEstatisticaTimeNoticia(tabelaCasa);
+                    var divCasa = documentJogo.DocumentNode.Descendants("div").First(d => d.Id == "team_home_stats");
+                    var tabelaCasa = divCasa.Descendants("table").First().Descendants("tbody").First();
+                    jogo.EstatisticasCasa = ExtraiEstatisticaTimeNoticia(tabelaCasa);
 
-                var divVisitante = documentJogo.DocumentNode.Descendants("div").First(d => d.Id == "team_away_stats");
-                var tabelaVisitante = divCasa.Descendants("table").First().Descendants("tbody").First();
-                jogo.EstatisticasVisitante = ExtraiEstatisticaTimeNoticia(tabelaVisitante);
+                    var divVisitante = documentJogo.DocumentNode.Descendants("div").First(d => d.Id == "team_away_stats");
+                    var tabelaVisitante = divCasa.Descendants("table").First().Descendants("tbody").First();
+                    jogo.EstatisticasVisitante = ExtraiEstatisticaTimeNoticia(tabelaVisitante);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(jogo.Url);
+                    Console.WriteLine(ex);
+                }
             }
         }
 
