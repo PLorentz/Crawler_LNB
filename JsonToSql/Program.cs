@@ -13,6 +13,47 @@ namespace JsonToSql
     {
         static void Main(string[] args)
         {
+            //GeraSqlPrincipal();
+
+            GeraSqlUpdateEquipe();
+        }
+
+        private static void GeraSqlUpdateEquipe()
+        {
+            var textoEquipes = File.ReadAllText(@"..\..\..\equipes.json");
+            var equipes = JsonConvert.DeserializeObject<List<Equipe>>(textoEquipes);
+
+            var sb = new StringBuilder();
+
+            AcrescentaSql(sb, "");
+            AcrescentaSql(sb, $"------------ Posições --------------");
+            AcrescentaSql(sb, "");
+
+            foreach (var posicao in equipes.SelectMany(e => e.Jogadores).Select(j => j.Posicao).Distinct())
+                AcrescentaSql(sb, $"INSERT INTO `POSICAO` (`DESCRICAO`) VALUES('{posicao}');");
+
+            foreach (var equipe in equipes)
+            {
+
+                AcrescentaSql(sb, "");
+                AcrescentaSql(sb, $"------------ Equipe: {equipe.Nome} --------------");
+                AcrescentaSql(sb, "");
+
+                AcrescentaSql(sb, $"SELECT @idEquipe := ID FROM equipe WHERE NOME = '{equipe.Nome}';");
+
+                foreach (var jogador in equipe.Jogadores)
+                {
+                    AcrescentaSqlBuscaJogador(sb, jogador.Nome);
+                    AcrescentaSql(sb, $"SELECT @idPosicao := ID FROM POSICAO WHERE DESCRICAO = '{jogador.Posicao}';");
+                    AcrescentaSql(sb, $"UPDATE `JOGADOR` SET `IDPOSICAO` = @idPosicao WHERE ID = @idJogador;");
+                }
+            }
+
+            File.WriteAllText("updateEquipe.sql", sb.ToString());
+        }
+
+        private static void GeraSqlPrincipal()
+        {
             var textoRecuperado = File.ReadAllText(@"..\..\..\jogos.json");
             var jogos = JsonConvert.DeserializeObject<List<Jogo>>(textoRecuperado);
 
@@ -145,14 +186,19 @@ namespace JsonToSql
 
             foreach (var estatisticaJogador in estatisticas)
             {
-                AcrescentaSql(sb, $@"SELECT @idJogador := j.ID 
-                                         FROM jogador j 
-                                         INNER JOIN equipejogador ej ON j.Id = ej.IDJOGADOR
-                                         WHERE j.NOME = '{estatisticaJogador.Jogador}' AND ej.IDEQUIPE = @idEquipe;");
+                AcrescentaSqlBuscaJogador(sb, estatisticaJogador.Jogador);
 
                 AcrescentaSql(sb, $"INSERT INTO `jogoequipejogador`(`IDJOGADOR`, `IDEQUIPEJOGO`, `LANCELIVRE`, `DOISPONTOS`, `TRESPONTOS`, `PONTO`, `REBOTE`, `FALTASCOMETIDAS`, `ASSISTENCIA`, `MINUTO`)");
                 AcrescentaSql(sb, $"VALUES(@idJogador, @IdEquipeJogo, {estatisticaJogador.LancesLivres}, {estatisticaJogador.DoisPontos}, {estatisticaJogador.TresPontos}, {estatisticaJogador.Pontos}, {estatisticaJogador.Rebotes}, {estatisticaJogador.FaltasCometidas}, {estatisticaJogador.Assistencias}, '{estatisticaJogador.Minutos}'); ");
             }
+        }
+
+        private static void AcrescentaSqlBuscaJogador(StringBuilder sb, string nomeJogador)
+        {
+            AcrescentaSql(sb, $@"SELECT @idJogador := j.ID 
+                                         FROM jogador j 
+                                         INNER JOIN equipejogador ej ON j.Id = ej.IDJOGADOR
+                                         WHERE j.NOME = '{nomeJogador}' AND ej.IDEQUIPE = @idEquipe;");
         }
 
         private static void AcrescentaSql(StringBuilder sb, string sql)
