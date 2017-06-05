@@ -13,9 +13,9 @@ namespace JsonToSql
     {
         static void Main(string[] args)
         {
-            //GeraSqlPrincipal();
+            GeraSqlPrincipal("2014-2015", 3, true);
 
-            GeraSqlUpdateEquipe();
+            //GeraSqlUpdateEquipe();
         }
 
         private static void GeraSqlUpdateEquipe()
@@ -52,16 +52,16 @@ namespace JsonToSql
             File.WriteAllText("updateEquipe.sql", sb.ToString());
         }
 
-        private static void GeraSqlPrincipal()
+        private static void GeraSqlPrincipal(string identificador, int idEdicao, bool geraApenasJogos)
         {
-            var textoRecuperado = File.ReadAllText(@"..\..\..\jogos.json");
+            var textoRecuperado = File.ReadAllText($@"..\..\..\jogos_{identificador}.json");
             var jogos = JsonConvert.DeserializeObject<List<Jogo>>(textoRecuperado);
 
             jogos = TrataJogos(jogos);
 
-            var sql = GeraSql(jogos);
+            var sql = GeraSql(jogos, idEdicao, geraApenasJogos);
 
-            File.WriteAllText("sql.sql", sql);
+            File.WriteAllText($"sql_{identificador}.sql", sql);
         }
 
         private static List<Jogo> TrataJogos(List<Jogo> jogos)
@@ -114,46 +114,49 @@ namespace JsonToSql
             return dadoLimpo;
         }
 
-        private static string GeraSql(List<Jogo> jogos)
+        private static string GeraSql(List<Jogo> jogos, int idEdicao, bool geraApenasJogos)
         {
             var sb = new StringBuilder();
 
-            AcrescentaSql(sb, "");
-            AcrescentaSql(sb, "------------ Equipes --------------");
-            AcrescentaSql(sb, "");
-
-            foreach (var equipe in jogos.SelectMany(j => new[] { j.EquipeCasa, j.EquipeVisitante }).Distinct())
-                AcrescentaSql(sb, $"INSERT INTO `equipe`(`NOME`) VALUES ('{equipe}');");
-
-            var jogadoresPorEquipe = jogos.SelectMany(j => new[] { new { Equipe = j.EquipeCasa, Jogadores = j.EstatisticasCasa.Select(e=> e.Jogador) },
-                                                          new { Equipe = j.EquipeVisitante, Jogadores = j.EstatisticasVisitante.Select(e=> e.Jogador) } })
-                                          .GroupBy(e => e.Equipe);
-
-            AcrescentaSql(sb, "");
-            AcrescentaSql(sb, "------------ Jogadores --------------");
-            AcrescentaSql(sb, "");
-
-            foreach (var equipe in jogadoresPorEquipe)
+            if (!geraApenasJogos)
             {
-                AcrescentaSql(sb, $"SELECT @idEquipe := ID FROM equipe WHERE NOME = '{equipe.Key}';");
-                foreach (var jogador in equipe.SelectMany(e => e.Jogadores).Distinct())
+                AcrescentaSql(sb, "");
+                AcrescentaSql(sb, "------------ Equipes --------------");
+                AcrescentaSql(sb, "");
+
+                foreach (var equipe in jogos.SelectMany(j => new[] { j.EquipeCasa, j.EquipeVisitante }).Distinct())
+                    AcrescentaSql(sb, $"INSERT INTO `equipe`(`NOME`) VALUES ('{equipe}');");
+
+                var jogadoresPorEquipe = jogos.SelectMany(j => new[] { new { Equipe = j.EquipeCasa, Jogadores = j.EstatisticasCasa.Select(e=> e.Jogador) },
+                                                          new { Equipe = j.EquipeVisitante, Jogadores = j.EstatisticasVisitante.Select(e=> e.Jogador) } })
+                                              .GroupBy(e => e.Equipe);
+
+                AcrescentaSql(sb, "");
+                AcrescentaSql(sb, "------------ Jogadores --------------");
+                AcrescentaSql(sb, "");
+
+                foreach (var equipe in jogadoresPorEquipe)
                 {
-                    AcrescentaSql(sb, $"INSERT INTO `jogador`(`SEXO`, `NOME`) VALUES ('M','{jogador}');");
-                    AcrescentaSql(sb, $"SELECT @idJogador := LAST_INSERT_ID();");
+                    AcrescentaSql(sb, $"SELECT @idEquipe := ID FROM equipe WHERE NOME = '{equipe.Key}';");
+                    foreach (var jogador in equipe.SelectMany(e => e.Jogadores).Distinct())
+                    {
+                        AcrescentaSql(sb, $"INSERT INTO `jogador`(`SEXO`, `NOME`) VALUES ('M','{jogador}');");
+                        AcrescentaSql(sb, $"SELECT @idJogador := LAST_INSERT_ID();");
 
-                    AcrescentaSql(sb, $"INSERT INTO `equipejogador`(`IDEQUIPE`, `IDJOGADOR`, `DATAINICIAL`, `DATAFINAL`)");
-                    AcrescentaSql(sb, $"VALUES(@idEquipe, @idJogador, '2010-05-05', NULL);");
+                        AcrescentaSql(sb, $"INSERT INTO `equipejogador`(`IDEQUIPE`, `IDJOGADOR`, `DATAINICIAL`, `DATAFINAL`)");
+                        AcrescentaSql(sb, $"VALUES(@idEquipe, @idJogador, '2010-05-05', NULL);");
+                    }
+                    AcrescentaSql(sb, "");
+                    AcrescentaSql(sb, "");
                 }
+
                 AcrescentaSql(sb, "");
+                AcrescentaSql(sb, "------------ Ginásios --------------");
                 AcrescentaSql(sb, "");
+
+                foreach (var ginasio in jogos.Select(j => j.Ginasio).Distinct())
+                    AcrescentaSql(sb, $"INSERT INTO `ginasio`(`NOME`) VALUES('{ginasio}');");
             }
-
-            AcrescentaSql(sb, "");
-            AcrescentaSql(sb, "------------ Ginásios --------------");
-            AcrescentaSql(sb, "");
-
-            foreach (var ginasio in jogos.Select(j => j.Ginasio).Distinct())
-                AcrescentaSql(sb, $"INSERT INTO `ginasio`(`NOME`) VALUES('{ginasio}');");
 
             AcrescentaSql(sb, "");
             AcrescentaSql(sb, "------------ Jogos --------------");
@@ -163,7 +166,7 @@ namespace JsonToSql
             {
                 AcrescentaSql(sb, $"SELECT @idGinasio := ID FROM ginasio WHERE NOME = '{jogo.Ginasio}';");
 
-                AcrescentaSql(sb, $"INSERT INTO `jogo`(`DURACAO`, `DATA`, `IDEDICAO`, `IDGINASIO`) VALUES(null, '{jogo.Data}', 1, @idGinasio);");
+                AcrescentaSql(sb, $"INSERT INTO `jogo`(`DURACAO`, `DATA`, `IDEDICAO`, `IDGINASIO`) VALUES(null, '{jogo.Data}', {idEdicao}, @idGinasio);");
                 AcrescentaSql(sb, $"SELECT @idJogo := LAST_INSERT_ID();");
 
                 AcrescentaJogoEquipe(sb, jogo.EquipeCasa, jogo.PontuacaoCasa, true, jogo.EstatisticasCasa);
